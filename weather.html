@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الطقس الحقيقي في العالم</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f1a, #1a1a40);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #00d2ff;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 40px;
+        }
+
+        input {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #00d2ff;
+        }
+
+        button {
+            padding: 15px 25px;
+            background: #00d2ff;
+            color: #0f0f1a;
+            border: none;
+            border-radius: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover { background: #00a8cc; }
+        button:disabled { background: #555; cursor: not-allowed; }
+
+        .weather-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+            display: none;
+        }
+
+        .weather-card.show {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .city-name { font-size: 1.5rem; color: #fff; }
+        .country-name { font-size: 1rem; color: #aaa; margin-bottom: 20px; }
+        
+        .icon { font-size: 5rem; display: block; margin-bottom: 10px; }
+        
+        .temp {
+            font-size: 4rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #fff, #00d2ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .desc { font-size: 1.2rem; color: #aaaacc; margin-bottom: 30px; }
+
+        .details {
+            display: flex;
+            justify-content: space-around;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 20px;
+        }
+
+        .detail-item { font-size: 1rem; color: #bbb; }
+
+        .error-msg, .loading-msg {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error-msg.show { display: block; color: #ff4757; }
+        .loading-msg.show { display: block; color: #00d2ff; }
+    </style>
+</head>
+<body>
+    
+    <div class="container">
+        <h1>الطقس الحي 🌍</h1>
+        <p class="subtitle">يبحث في جميع مدن ودول العالم</p>
+        
+        <div class="search-box">
+            <input type="text" id="city-input" placeholder="اكتب أي مدينة (مثال: طوكيو، باريس...)">
+            <button id="search-btn">بحث</button>
+        </div>
+
+        <p id="loading-msg" class="loading-msg">⏳ جاري البحث عن بيانات حقيقية...</p>
+
+        <div id="weather-card" class="weather-card">
+            <h2 class="city-name" id="city-name">---</h2>
+            <p class="country-name" id="country-name">---</p>
+            <div>
+                <span class="icon" id="icon">---</span>
+                <span class="temp" id="temp">--°C</span>
+            </div>
+            <p class="desc" id="desc">---</p>
+            <div class="details">
+                <div class="detail-item">💧 الرطوبة: <span id="humidity">--%</span></div>
+                <div class="detail-item">💨 الرياح: <span id="wind">-- km/h</span></div>
+            </div>
+        </div>
+
+        <p id="error-msg" class="error-msg">❌ عذراً، لم نستطع إيجاد هذه المدينة</p>
+    </div>
+
+    <script>
+        const input = document.getElementById('city-input');
+        const btn = document.getElementById('search-btn');
+        const card = document.getElementById('weather-card');
+        const errorMsg = document.getElementById('error-msg');
+        const loadingMsg = document.getElementById('loading-msg');
+
+        btn.addEventListener('click', searchWeather);
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchWeather();
+        });
+
+        async function searchWeather() {
+            const city = input.value.trim();
+            if (city === '') return;
+
+            // إظهار التحميل وإخفاء الباقي
+            loadingMsg.classList.add('show');
+            card.classList.remove('show');
+            errorMsg.classList.remove('show');
+            btn.disabled = true;
+
+            try {
+                // 1. تحويل اسم المدينة إلى إحداثيات (خط عرض وخط طول)
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1&language=ar&format=json`);
+                const geoData = await geoRes.json();
+
+                if (!geoData.results || geoData.results.length === 0) {
+                    throw new Error('City not found');
+                }
+
+                const { latitude, longitude, name, country } = geoData.results[0];
+
+                // 2. جلب الطقس الحقيقي بالإحداثيات
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`);
+                const weatherData = await weatherRes.json();
+                const current = weatherData.current;
+
+                // 3. ترجمة أكواد الأرصاد إلى نص ورموز
+                const weatherInfo = getWeatherDetails(current.weather_code);
+
+                // 4. تحديث الشاشة
+                document.getElementById('city-name').textContent = name;
+                document.getElementById('country-name').textContent = country;
+                document.getElementById('temp').textContent = `${current.temperature_2m}°C`;
+                document.getElementById('desc').textContent = weatherInfo.desc;
+                document.getElementById('humidity').textContent = `${current.relative_humidity_2m}%`;
+                document.getElementById('wind').textContent = `${current.wind_speed_10m} km/h`;
+                document.getElementById('icon').textContent = weatherInfo.icon;
+
+                card.classList.add('show');
+
+            } catch (error) {
+                errorMsg.classList.add('show');
+            } finally {
+                loadingMsg.classList.remove('show');
+                btn.disabled = false;
+                input.value = '';
+            }
+        }
+
+        // دالة ترجمة أكواد طقس الأرصاد الجوية (WMO)
+        function getWeatherDetails(code) {
+            if (code === 0) return { icon: "☀️", desc: "صافٍ تماماً" };
+            if (code <= 3) return { icon: "⛅", desc: "غائم جزئياً" };
+            if (code <= 48) return { icon: "🌫️", desc: "ضبابي" };
+            if (code <= 57) return { icon: "🌦️", desc: "رذاذ خفيف" };
+            if (code <= 67) return { icon: "🌧️", desc: "ماطر" };
+            if (code <= 77) return { icon: "❄️", desc: "ثلوج" };
+            if (code <= 82) return { icon: "🌧️", desc: "أمطار غزيرة" };
+            if (code <= 86) return { icon: "🌨️", desc: "ثلوج كثيفة" };
+            if (code <= 99) return { icon: "⛈️", desc: "عواصف رعدية" };
+            return { icon: "🌐", desc: "جاري تحديث البيانات" };
+        }
+    </script>
+</body>
+</html>
